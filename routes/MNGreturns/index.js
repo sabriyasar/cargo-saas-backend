@@ -3,7 +3,7 @@ const router = express.Router();
 
 // Alt rotalar
 const returnsRoute = require('./returns');
-const checkRoute = require('./mngRoutes');
+const checkRoute = require('./mngReturnOrder');
 
 // Rotaları bağla
 router.use('/', returnsRoute);       // /api/returns
