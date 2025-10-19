@@ -1,30 +1,31 @@
-// backend/services/shopifyService.js
 const axios = require('axios');
+const { ShopModel } = require('../models/Shop');
 
-async function getShopifyOrdersFromAPI(status = 'open', limit = 20) {
+/**
+ * shop: myshop.myshopify.com gibi domain
+ * status: open, closed, any
+ * limit: çekilecek sipariş sayısı
+ */
+async function getShopifyOrdersFromAPI(shop, status = 'open', limit = 20) {
   try {
-    const shopDomain = process.env.SHOPIFY_SHOP; // Örn: 'myshop.myshopify.com'
-    const accessToken = process.env.SHOPIFY_ACCESS_TOKEN;
-
-    if (!shopDomain || !accessToken) {
-      throw new Error('SHOPIFY_SHOP veya SHOPIFY_ACCESS_TOKEN tanımlı değil.');
+    // MongoDB'den token'ı al
+    const shopData = await ShopModel.findOne({ shop });
+    if (!shopData || !shopData.accessToken) {
+      throw new Error(`Token bulunamadı veya mağaza kaydı yok: ${shop}`);
     }
 
     const response = await axios.get(
-      `https://${shopDomain}/admin/api/2025-10/orders.json`,
+      `https://${shop}/admin/api/2025-10/orders.json`,
       {
         headers: {
-          'X-Shopify-Access-Token': accessToken,
+          'X-Shopify-Access-Token': shopData.accessToken,
           'Content-Type': 'application/json'
         },
-        params: {
-          status,
-          limit
-        }
+        params: { status, limit }
       }
     );
 
-    // Shopify'tan gelen veriyi sadeleştirme
+    // Gelen veriyi sadeleştir
     return response.data.orders.map(order => ({
       id: order.id,
       name: order.name,
@@ -43,6 +44,7 @@ async function getShopifyOrdersFromAPI(status = 'open', limit = 20) {
       },
       created_at: order.created_at
     }));
+
   } catch (error) {
     console.error('❌ Shopify siparişleri alınamadı:', error.response?.data || error.message);
     throw new Error('Shopify siparişleri alınamadı.');

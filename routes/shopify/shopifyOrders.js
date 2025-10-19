@@ -1,20 +1,20 @@
-// backend/routes/shopify/shopifyOrders.js
 const express = require('express');
 const router = express.Router();
 const { getShopifyOrdersFromAPI } = require('../../services/shopifyService');
 
 router.get('/', async (req, res) => {
+  const shop = req.query.shop; // örn: myshop.myshopify.com
+  if (!shop) return res.status(400).json({ success: false, message: 'Shop parametre gerekli' });
+
+  const status = req.query.status || 'open';
+  const limit = parseInt(req.query.limit) || 20;
+
   try {
-    // query ile status ve limit alabiliriz
-    const status = req.query.status || 'open';
-    const limit = parseInt(req.query.limit) || 20;
-
-    const orders = await getShopifyOrdersFromAPI(status, limit);
-
+    const orders = await getShopifyOrdersFromAPI(shop, status, limit);
     res.json({ success: true, data: orders });
   } catch (err) {
-    console.error('Shopify siparişleri alınamadı:', err);
-    res.status(500).json({ success: false, message: err.message || 'Shopify siparişleri alınamadı' });
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
