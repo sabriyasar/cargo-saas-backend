@@ -29,7 +29,7 @@ app.get('/', (req, res) => {
 
 // ✅ Route'ları ekle
 const MNGreturns = require('./routes/MNGreturns/returns');      // /returns
-const MNGshipments = require('./routes/MNGshipments/mngShipments');  // /shipments
+const MNGshipments = require('./routes/MNGshipments/mng-shipments');  // /shipments
 const shopifyOrdersRoute = require('./routes/shopify/shopifyOrders');
 const cbsRoute = require('./routes/MNGcbs/cbs');
 
