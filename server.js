@@ -28,14 +28,16 @@ app.get('/', (req, res) => {
 });
 
 // ✅ Route'ları ekle
-const MNGreturns = require('./routes/MNGreturns');      // /returns
-const MNGshipments = require('./routes/MNGshipments');  // /shipments
+const MNGreturns = require('./routes/MNGreturns/returns');      // /returns
+const MNGshipments = require('./routes/MNGshipments/mngShipments');  // /shipments
 const shopifyOrdersRoute = require('./routes/shopify/shopifyOrders');
+const cbsRoute = require('./routes/MNGcbs/cbs');
 
 
 app.use('/returns', MNGreturns);
 app.use('/shipments', MNGshipments);
 app.use('/shopify/orders', shopifyOrdersRoute);
+app.use('/cbs', cbsRoute);
 
 // ✅ Shopify OAuth route'ları
 const shopifyAuthRoute = require('./routes/shopify/auth');       // /shopify/auth

@@ -2,6 +2,7 @@
 const mongoose = require('mongoose');
 
 const ShipmentSchema = new mongoose.Schema({
+    orderId: { type: String, required: true }, // frontend’den gelen orderId
     return: { type: mongoose.Schema.Types.ObjectId, ref: 'Return' },
     trackingNumber: String,
     courier: String, // Yurtiçi, Aras, MNG vb.

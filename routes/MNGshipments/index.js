@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 // Dosya isimleri case-sensitive olmalı
-const MNGshipments = require('./MNGshipments'); // MNGshipments.js
+const MNGshipments = require('./mngShipments'); // MNGshipments.js
 const MNGorders = require('./MNGorders');       // MNGorders.js
 const shopifyOrders = require('../shopify/shopifyOrders'); // Shopify siparişleri
 
