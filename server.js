@@ -37,6 +37,8 @@ const cbsRoute = require('./routes/MNGcbs/cbs');
 const shopifySettingsRoute = require('./routes/shopify/settings');
 const shopifyWebhooksRoute = require('./routes/shopify/webhooks'); // /shopify/webhooks
 const shopifyTokenRoute = require("./routes/shopify/token");
+const shopifyShopsRouter = require('./routes/shopify/shopifyShops');
+
 
 app.use('/returns', MNGreturns);
 app.use('/shipments', MNGshipments);
@@ -45,6 +47,7 @@ app.use('/cbs', cbsRoute);
 app.use('/shopify/settings', shopifySettingsRoute);
 app.use('/shopify/webhooks', shopifyWebhooksRoute);
 app.use("/shopify/token", shopifyTokenRoute);
+app.use('/shopify', shopifyShopsRouter);
 
 
 // ✅ Shopify OAuth route'ları
