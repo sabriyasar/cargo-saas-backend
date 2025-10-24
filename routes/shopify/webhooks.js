@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { ShopModel } = require('../../models/Shop');
-const { createMNGShipment } = require('../../services/shipmentService'); // mevcut kargo servisin
+const { createMNGShipment } = require('../../services/mngService'); // mevcut kargo servisin
 const axios = require('axios');
 const crypto = require('crypto');
 
