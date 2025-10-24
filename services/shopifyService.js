@@ -1,22 +1,24 @@
 const axios = require('axios');
-const dotenv = require('dotenv');
-dotenv.config();
+const { ShopModel } = require('../models/Shop');
 
-async function getShopifyOrdersFromAPI(shop, status = 'open', limit = 20) {
+async function getShopifyOrdersFromAPI(shop, status = 'open', limit = 20, accessTokenFromDB) {
   try {
-    const accessToken = process.env.ADMIN_API_TOKEN;
-    const store = process.env.SHOPIFY_STORE;
-
-    if (!accessToken || !store) {
-      throw new Error('ADMIN_API_TOKEN veya SHOPIFY_STORE tanımlı değil.');
+    if (!shop) {
+      throw new Error('Shop parametresi gerekli.');
     }
 
-    if (shop !== store) {
-      throw new Error(`Shop uyuşmuyor: Beklenen ${store}, gelen ${shop}`);
+    // 🔹 Eğer token frontend’den gelmediyse MongoDB’den al
+    let accessToken = accessTokenFromDB;
+    if (!accessToken) {
+      const shopRecord = await ShopModel.findOne({ shop });
+      if (!shopRecord) {
+        throw new Error('Mağaza bulunamadı veya token alınmamış.');
+      }
+      accessToken = shopRecord.accessToken;
     }
 
     const response = await axios.get(
-      `https://${store}/admin/api/2025-10/orders.json`,
+      `https://${shop}/admin/api/2025-10/orders.json`,
       {
         headers: {
           'X-Shopify-Access-Token': accessToken,
@@ -39,13 +41,13 @@ async function getShopifyOrdersFromAPI(shop, status = 'open', limit = 20) {
       customer: {
         name: order.customer
           ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim()
-          : '', // artık Anonim yok, boş string
+          : '',
         email: order.customer?.email || '',
         phone: order.shipping_address?.phone || order.customer?.phone || '',
         cityName: order.shipping_address?.city || '',
         districtName: order.shipping_address?.province || '',
         address: order.shipping_address?.address1 || '',
-      },      
+      },
       created_at: order.created_at,
     }));
 

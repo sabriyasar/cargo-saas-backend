@@ -6,7 +6,11 @@ const { ShopModel } = require('../../models/Shop');
 router.get('/', async (req, res) => {
   const { shop, code, state } = req.query;
 
-  if (state !== 'nonce123') return res.status(403).send('State uyuşmadı');
+  // 🔹 State doğrulaması
+  const savedState = req.cookies.shopify_oauth_state;
+  if (!state || state !== savedState) {
+    return res.status(403).send('State uyuşmadı veya eksik');
+  }
 
   const apiKey = process.env.SHOPIFY_API_KEY;
   const apiSecret = process.env.SHOPIFY_API_SECRET;
@@ -20,7 +24,7 @@ router.get('/', async (req, res) => {
 
     const accessToken = response.data.access_token;
 
-    // MongoDB’ye kaydet
+    // 🔹 MongoDB’ye kaydet veya güncelle
     await ShopModel.updateOne(
       { shop },
       { shop, accessToken, installedAt: new Date() },

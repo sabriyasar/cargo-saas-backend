@@ -5,11 +5,13 @@ const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 
 app.use(cors());
 app.use(bodyParser.json());
+app.use(cookieParser());
 
 const PORT = process.env.PORT || 3003;
 const MONGO_URI = process.env.MONGO_URI;
@@ -32,12 +34,16 @@ const MNGreturns = require('./routes/MNGreturns/returns');      // /returns
 const MNGshipments = require('./routes/MNGshipments/mng-shipments');  // /shipments
 const shopifyOrdersRoute = require('./routes/shopify/shopifyOrders');
 const cbsRoute = require('./routes/MNGcbs/cbs');
-
+const shopifySettingsRoute = require('./routes/shopify/settings');
+const shopifyWebhooksRoute = require('./routes/shopify/webhooks'); // /shopify/webhooks
 
 app.use('/returns', MNGreturns);
 app.use('/shipments', MNGshipments);
 app.use('/shopify/orders', shopifyOrdersRoute);
 app.use('/cbs', cbsRoute);
+app.use('/shopify/settings', shopifySettingsRoute);
+app.use('/shopify/webhooks', shopifyWebhooksRoute);
+
 
 // ✅ Shopify OAuth route'ları
 const shopifyAuthRoute = require('./routes/shopify/auth');       // /shopify/auth
