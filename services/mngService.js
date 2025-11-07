@@ -45,17 +45,19 @@ async function findCityAndDistrictCodes(cityName, districtName) {
 
 /**
  * 🔹 Identity API’den JWT token al
- * (fallback: .env içindeki statik JWT kullanılabilir)
  */
 async function getIdentityToken() {
   if (process.env.MNG_ORDER_JWT) {
+    console.log("🔑 Statik MNG_ORDER_JWT kullanılıyor.");
     return process.env.MNG_ORDER_JWT;
   }
 
   if (identityTokenCache && new Date() < identityTokenCache.expireDate) {
+    console.log("♻️ Cached MNG token kullanılıyor.");
     return identityTokenCache.token;
   }
 
+  console.log("🔐 Yeni MNG identity token alınıyor...");
   const response = await axios.post(
     `${BASE_URL}/token`,
     {
@@ -77,6 +79,7 @@ async function getIdentityToken() {
   const { jwt, jwtExpireDate } = response.data;
   if (!jwt || !jwtExpireDate) throw new Error("MNG Identity Token eksik!");
 
+  console.log("✅ MNG identity token başarıyla alındı.");
   identityTokenCache = { token: jwt, expireDate: new Date(jwtExpireDate) };
   return jwt;
 }
@@ -85,10 +88,11 @@ async function getIdentityToken() {
  * 🔹 Yeni Standard Command API - createOrder
  */
 async function createOrder(orderData) {
+  console.log("📦 MNG createOrder() başladı. Referans:", orderData.referenceId || orderData.orderId);
+
   const identityToken = await getIdentityToken();
   const referenceId = orderData.referenceId || orderData._id || orderData.orderId?.toString();
 
-  // 🔹 CBS Info kodları sadece customerId yoksa alınacak
   let cityCode, districtCode;
   if (!orderData.recipient?.customerId) {
     if (!orderData.recipient?.cityName || !orderData.recipient?.districtName) {
@@ -99,43 +103,22 @@ async function createOrder(orderData) {
     districtCode = codes.districtCode;
   }
 
-  // 🔹 Recipient bilgisi customerId’ye göre ayarlanıyor
   const recipient = orderData.recipient?.customerId
     ? {
         customerId: orderData.recipient.customerId,
         refCustomerId: orderData.recipient.refCustomerId || "",
-        // customerId doluysa city/district ve fullName boş olmalı
-        cityCode: undefined,
-        districtCode: undefined,
-        cityName: "",
-        districtName: "",
-        address: "",
-        bussinessPhoneNumber: "",
-        email: "",
-        taxOffice: "",
-        taxNumber: "",
-        fullName: "",
-        homePhoneNumber: "",
-        mobilePhoneNumber: "",
       }
     : {
-        customerId: undefined,
-        refCustomerId: orderData.recipient.refCustomerId || "",
         cityCode,
         districtCode,
         cityName: orderData.recipient.cityName,
         districtName: orderData.recipient.districtName,
         address: orderData.recipient.address || "",
-        bussinessPhoneNumber: orderData.recipient.bussinessPhoneNumber || "",
         email: orderData.recipient.email || "",
-        taxOffice: orderData.recipient.taxOffice || "",
-        taxNumber: orderData.recipient.taxNumber || "",
         fullName: orderData.recipient.fullName || "",
-        homePhoneNumber: orderData.recipient.homePhoneNumber || "",
         mobilePhoneNumber: orderData.recipient.mobilePhoneNumber || "",
       };
 
-  // 🔹 API body (dokümana uygun)
   const apiBody = {
     order: {
       referenceId,
@@ -146,15 +129,9 @@ async function createOrder(orderData) {
       shipmentServiceType: 1,
       packagingType: orderData.packagingType || 1,
       content: orderData.content || "İçerik 1",
-      smsPreference1: 1,
-      smsPreference2: 0,
-      smsPreference3: 0,
       paymentType: 1,
       deliveryType: 1,
       description: orderData.message || orderData.content || `Sipariş ${referenceId}`,
-      marketPlaceShortCode: "",
-      marketPlaceSaleCode: "",
-      pudoId: "",
     },
     orderPieceList:
       orderData.pieces?.map((p, i) => ({
@@ -167,6 +144,7 @@ async function createOrder(orderData) {
   };
 
   try {
+    console.log("🚀 MNG createOrder isteği gönderiliyor...");
     const response = await axios.post(`${BASE_URL}/standardcmdapi/createOrder`, apiBody, {
       headers: {
         Authorization: `Bearer ${identityToken}`,
@@ -177,6 +155,8 @@ async function createOrder(orderData) {
         "x-api-version": DEFAULT_API_VERSION,
       },
     });
+
+    console.log("✅ MNG createOrder yanıtı alındı:", response.data);
 
     const trackingNumber =
       response.data?.order?.barcode ||
@@ -189,12 +169,43 @@ async function createOrder(orderData) {
       trackingNumber,
     };
   } catch (err) {
-    console.error("❌ MNG Standard Command createOrder hatası:", err.response?.data || err.message);
+    console.error("❌ MNG createOrder hatası:", err.response?.data || err.message);
     throw err;
   }
+}
+
+/**
+ * 🔹 Shopify webhook tarafından çağrılacak ana fonksiyon
+ * MNG'de sipariş oluşturur ve takip numarasını döner
+ */
+async function createMNGShipment({ orderId, courier, orderData }) {
+  console.log("🚚 createMNGShipment tetiklendi:", orderId, courier);
+
+  const recipient = {
+    fullName: `${orderData.shipping_address?.first_name || ""} ${orderData.shipping_address?.last_name || ""}`.trim(),
+    address: orderData.shipping_address?.address1 || "",
+    cityName: orderData.shipping_address?.city || "",
+    districtName: orderData.shipping_address?.province || "",
+    mobilePhoneNumber: orderData.shipping_address?.phone || orderData.customer?.phone || "",
+    email: orderData.email || "",
+  };
+
+  const shipmentData = {
+    referenceId: orderId,
+    content: orderData.line_items?.map((i) => i.title).join(", ") || "Ürün",
+    pieces: [{ desi: 2, kg: 1, content: "Ürün paketi" }],
+    recipient,
+  };
+
+  console.log("📦 MNG createOrder çağrılıyor...");
+  const response = await createOrder(shipmentData);
+  console.log("✅ MNG createOrder tamamlandı:", response.trackingNumber);
+
+  return response;
 }
 
 module.exports = {
   getIdentityToken,
   createOrder,
+  createMNGShipment, // 🔹 Yeni eklendi
 };
