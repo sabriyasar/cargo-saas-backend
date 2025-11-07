@@ -12,10 +12,9 @@ const SHOPIFY_SECRET = process.env.SHOPIFY_API_SECRET;
  */
 function verifyShopifyWebhook(req) {
   const hmacHeader = req.headers['x-shopify-hmac-sha256'];
-  const body = req.rawBody;
   const digest = crypto
     .createHmac('sha256', SHOPIFY_SECRET)
-    .update(body, 'utf8')
+    .update(req.rawBody) // Buffer olarak kullanıyoruz
     .digest('base64');
 
   return digest === hmacHeader;
@@ -27,7 +26,7 @@ function verifyShopifyWebhook(req) {
 router.use(
   express.json({
     verify: (req, res, buf) => {
-      req.rawBody = buf.toString();
+      req.rawBody = buf; // Buffer olarak sakla
     },
   })
 );
@@ -44,7 +43,6 @@ router.post('/orders-create', async (req, res) => {
       console.error('❌ Shopify webhook doğrulanamadı!');
       return res.status(401).send('Webhook doğrulanamadı');
     }
-
     console.log('✅ Shopify webhook doğrulaması başarılı.');
 
     const order = req.body;
@@ -54,7 +52,6 @@ router.post('/orders-create', async (req, res) => {
       console.error('❌ Shopify shop domain header eksik!');
       return res.status(400).send('Shop header yok');
     }
-
     console.log(`🏪 Shop domain: ${shop}`);
     console.log(`🧾 Order ID: ${order.id}`);
 
@@ -64,7 +61,6 @@ router.post('/orders-create', async (req, res) => {
       console.error(`❌ Shop kaydı bulunamadı: ${shop}`);
       return res.status(404).send('Shop bulunamadı');
     }
-
     console.log('✅ Shop kaydı bulundu.');
 
     // 3️⃣ MNG gönderi oluşturma
@@ -102,7 +98,6 @@ router.post('/orders-create', async (req, res) => {
           },
         }
       );
-
       console.log('✅ Shopify fulfillment başarıyla oluşturuldu.');
     } else {
       console.warn('⚠️ Shopify fulfillment oluşturulmadı — accessToken veya trackingNumber eksik.');
