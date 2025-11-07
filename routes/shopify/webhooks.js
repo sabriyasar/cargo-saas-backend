@@ -12,7 +12,7 @@ const SHOPIFY_SECRET = process.env.SHOPIFY_API_SECRET;
  */
 function verifyShopifyWebhook(req) {
   const hmacHeader = req.headers['x-shopify-hmac-sha256'];
-  const body = req.rawBody; // ham gövdeyi kullanıyoruz
+  const body = req.rawBody;
   const digest = crypto
     .createHmac('sha256', SHOPIFY_SECRET)
     .update(body, 'utf8')
@@ -27,37 +27,66 @@ function verifyShopifyWebhook(req) {
 router.use(
   express.json({
     verify: (req, res, buf) => {
-      req.rawBody = buf.toString(); // ham body'yi sakla
+      req.rawBody = buf.toString();
     },
   })
 );
 
+/**
+ * 🔹 Shopify "orders/create" webhook
+ */
 router.post('/orders-create', async (req, res) => {
+  console.log('📦 [Webhook] Yeni "orders/create" isteği alındı.');
+
   try {
+    // 1️⃣ Shopify doğrulaması
     if (!verifyShopifyWebhook(req)) {
       console.error('❌ Shopify webhook doğrulanamadı!');
       return res.status(401).send('Webhook doğrulanamadı');
     }
 
+    console.log('✅ Shopify webhook doğrulaması başarılı.');
+
     const order = req.body;
     const shop = req.headers['x-shopify-shop-domain'];
 
-    if (!shop) return res.status(400).send('Shop header yok');
+    if (!shop) {
+      console.error('❌ Shopify shop domain header eksik!');
+      return res.status(400).send('Shop header yok');
+    }
 
+    console.log(`🏪 Shop domain: ${shop}`);
+    console.log(`🧾 Order ID: ${order.id}`);
+
+    // 2️⃣ Shop kaydını kontrol et
     const shopRecord = await ShopModel.findOne({ shop });
-    if (!shopRecord) return res.status(404).send('Shop bulunamadı');
+    if (!shopRecord) {
+      console.error(`❌ Shop kaydı bulunamadı: ${shop}`);
+      return res.status(404).send('Shop bulunamadı');
+    }
 
-    // 1️⃣ MNG gönderi oluştur
+    console.log('✅ Shop kaydı bulundu.');
+
+    // 3️⃣ MNG gönderi oluşturma
+    console.log('🚚 MNG gönderi oluşturma başlatıldı...');
     const shipmentRes = await createMNGShipment({
       orderId: order.id.toString(),
       courier: 'MNG',
       orderData: order,
     });
 
-    const trackingNumber = shipmentRes?.data?.trackingNumber;
+    console.log('📦 MNG gönderi yanıtı:', JSON.stringify(shipmentRes.data, null, 2));
 
-    // 2️⃣ Shopify fulfillment oluştur
+    const trackingNumber = shipmentRes?.data?.trackingNumber;
+    if (!trackingNumber) {
+      console.warn('⚠️ MNG yanıtında trackingNumber bulunamadı!');
+    } else {
+      console.log(`✅ MNG takip numarası: ${trackingNumber}`);
+    }
+
+    // 4️⃣ Shopify fulfillment oluştur
     if (shopRecord.accessToken && trackingNumber) {
+      console.log('🔄 Shopify fulfillment oluşturuluyor...');
       await axios.post(
         `https://${shop}/admin/api/2025-10/orders/${order.id}/fulfillments.json`,
         {
@@ -73,12 +102,16 @@ router.post('/orders-create', async (req, res) => {
           },
         }
       );
+
+      console.log('✅ Shopify fulfillment başarıyla oluşturuldu.');
+    } else {
+      console.warn('⚠️ Shopify fulfillment oluşturulmadı — accessToken veya trackingNumber eksik.');
     }
 
-    console.log('✅ Webhook başarıyla işlendi');
+    console.log('🎯 Webhook başarıyla işlendi.');
     res.status(200).send('Webhook işlendi');
   } catch (err) {
-    console.error('❌ Webhook hata:', err);
+    console.error('❌ Webhook hata:', err.response?.data || err.message);
     res.status(500).send('Hata oluştu');
   }
 });
