@@ -18,12 +18,19 @@ function verifyShopifyWebhook(req) {
     return false;
   }
 
-  const digest = crypto
-    .createHmac('sha256', SHOPIFY_SECRET)
-    .update(req.rawBody) // Buffer olarak kullanıyoruz
-    .digest('base64');
+  try {
+    const digest = crypto
+      .createHmac('sha256', SHOPIFY_SECRET)
+      .update(req.rawBody) // Buffer olarak kullanılıyor
+      .digest('base64');
 
-  return digest === hmacHeader;
+    const valid = digest === hmacHeader;
+    if (!valid) console.error('❌ Shopify HMAC doğrulaması başarısız!');
+    return valid;
+  } catch (err) {
+    console.error('❌ Shopify HMAC doğrulama hatası:', err.message);
+    return false;
+  }
 }
 
 /**
@@ -35,7 +42,6 @@ router.post('/orders-create', async (req, res) => {
   try {
     // 1️⃣ Shopify doğrulaması
     if (!verifyShopifyWebhook(req)) {
-      console.error('❌ Shopify webhook doğrulanamadı!');
       return res.status(401).send('Webhook doğrulanamadı');
     }
     console.log('✅ Shopify webhook doğrulaması başarılı.');
@@ -66,9 +72,9 @@ router.post('/orders-create', async (req, res) => {
       orderData: order,
     });
 
-    console.log('📦 MNG gönderi yanıtı:', JSON.stringify(shipmentRes.data, null, 2));
+    console.log('📦 MNG gönderi yanıtı:', shipmentRes);
 
-    const trackingNumber = shipmentRes?.data?.trackingNumber;
+    const trackingNumber = shipmentRes?.trackingNumber || shipmentRes?.data?.trackingNumber;
     if (!trackingNumber) {
       console.warn('⚠️ MNG yanıtında trackingNumber bulunamadı!');
     } else {
@@ -101,7 +107,7 @@ router.post('/orders-create', async (req, res) => {
     console.log('🎯 Webhook başarıyla işlendi.');
     res.status(200).send('Webhook işlendi');
   } catch (err) {
-    console.error('❌ Webhook hata:', err.response?.data || err.message);
+    console.error('❌ Webhook hata:', err.response?.data || err.message || err);
     res.status(500).send('Hata oluştu');
   }
 });
