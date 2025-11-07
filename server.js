@@ -1,6 +1,4 @@
 require('dotenv').config();
-console.log("Mongo URI:", process.env.MONGO_URI);
-
 const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
@@ -10,7 +8,6 @@ const cookieParser = require('cookie-parser');
 const app = express();
 
 app.use(cors());
-app.use(bodyParser.json());
 app.use(cookieParser());
 
 const PORT = process.env.PORT || 3003;
@@ -39,6 +36,15 @@ const shopifyWebhooksRoute = require('./routes/shopify/webhooks'); // /shopify/w
 /* const shopifyTokenRoute = require("./routes/shopify/token"); */
 const shopifyShopsRouter = require('./routes/shopify/shopifyShops');
 
+// ❗ Shopify webhook'ları için raw body middleware
+app.use(
+    '/shopify/webhooks',
+    bodyParser.json({
+        verify: (req, res, buf) => {
+            req.rawBody = buf; // Buffer olarak sakla
+        }
+    })
+);
 
 app.use('/returns', MNGreturns);
 app.use('/shipments', MNGshipments);
@@ -48,7 +54,6 @@ app.use('/shopify/settings', shopifySettingsRoute);
 app.use('/shopify/webhooks', shopifyWebhooksRoute);
 /* app.use("/shopify/token", shopifyTokenRoute); */
 app.use('/shopify', shopifyShopsRouter);
-
 
 // ✅ Shopify OAuth route'ları
 const shopifyAuthRoute = require('./routes/shopify/auth');       // /shopify/auth
