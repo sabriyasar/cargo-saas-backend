@@ -12,6 +12,11 @@ const SHOPIFY_SECRET = process.env.SHOPIFY_API_SECRET;
  */
 function verifyShopifyWebhook(req) {
   const hmacHeader = req.headers['x-shopify-hmac-sha256'];
+  if (!req.rawBody) {
+    console.error('❌ req.rawBody undefined! Webhook doğrulaması başarısız.');
+    return false;
+  }
+
   const digest = crypto
     .createHmac('sha256', SHOPIFY_SECRET)
     .update(req.rawBody) // Buffer olarak kullanıyoruz
