@@ -6,6 +6,7 @@ const axios = require('axios');
 const crypto = require('crypto');
 
 const SHOPIFY_SECRET = process.env.SHOPIFY_API_SECRET;
+const HMAC_BYPASS = process.env.HMAC_BYPASS === 'true'; // true yaparsan test log’ları düşer
 
 /**
  * 🔒 Shopify webhook doğrulama - raw body üzerinden
@@ -16,6 +17,11 @@ function verifyShopifyWebhook(req) {
   if (!req.rawBody) {
     console.error('❌ req.rawBody undefined! Webhook doğrulaması başarısız.');
     return false;
+  }
+
+  if (HMAC_BYPASS) {
+    console.log('⚠️ HMAC bypass aktif — doğrulama atlandı (test modunda).');
+    return true;
   }
 
   try {
@@ -44,7 +50,7 @@ router.post('/orders-create', async (req, res) => {
     if (!verifyShopifyWebhook(req)) {
       return res.status(401).send('Webhook doğrulanamadı');
     }
-    console.log('✅ Shopify webhook doğrulaması başarılı.');
+    console.log('✅ Shopify webhook doğrulaması başarılı veya bypass edildi.');
 
     const order = req.body;
     const shop = req.headers['x-shopify-shop-domain'];
