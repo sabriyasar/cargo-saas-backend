@@ -2,6 +2,7 @@ const cors = require("cors");
 
 const allowedOrigins = [
   "https://cargo-saas-backend.onrender.com",
+  "https://cargo-saas-frontend.vercel.app",
 ];
 
 const corsOptions = {
