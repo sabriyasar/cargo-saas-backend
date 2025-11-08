@@ -107,12 +107,15 @@ async function createOrder(orderData) {
   const identityToken = await getIdentityToken();
   const referenceId = orderData.referenceId || orderData._id || orderData.orderId?.toString();
 
-  let cityCode, districtCode;
-  if (!orderData.recipient?.customerId) {
-    const codes = await findCityAndDistrictCodes(orderData.recipient.cityName, orderData.recipient.districtName);
-    cityCode = codes.cityCode;
-    districtCode = codes.districtCode;
-  }
+  let cityCode = orderData.recipient.cityCode;
+let districtCode = orderData.recipient.districtCode;
+
+if (!cityCode || !districtCode) {
+  // cityCode/districtCode yoksa CBS lookup yap
+  const codes = await findCityAndDistrictCodes(orderData.recipient.cityName, orderData.recipient.districtName);
+  cityCode = codes.cityCode;
+  districtCode = codes.districtCode;
+}
 
   const recipient = orderData.recipient?.customerId
     ? {
