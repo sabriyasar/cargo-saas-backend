@@ -62,6 +62,7 @@ router.post("/", async (req, res) => {
       orderId,
       courier,
       trackingNumber: shipmentData.trackingNumber || "",
+      barcode: shipmentData.barcode || "",
       labelUrl: shipmentData.labelUrl || shipmentData.returnOrderLabelURL || "",
       status: "created" // mevcut enum: created, in_transit, delivered
     });
