@@ -13,7 +13,9 @@ const OrderSchema = new mongoose.Schema({
         }
     ],
     status: { type: String, enum: ['pending', 'fulfilled', 'cancelled'], default: 'pending' },
-    totalAmount: Number
+    totalAmount: Number,
+    barcode: { type: String },          // ✅ barkod eklendi
+    trackingNumber: { type: String }    // ✅ MNG takip numarası eklendi
 }, { timestamps: true });
 
 module.exports = mongoose.model('Order', OrderSchema);

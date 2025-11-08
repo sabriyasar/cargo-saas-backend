@@ -5,6 +5,7 @@ const ShipmentSchema = new mongoose.Schema({
     orderId: { type: String, required: true }, // frontend’den gelen orderId
     return: { type: mongoose.Schema.Types.ObjectId, ref: 'Return' },
     trackingNumber: String,
+    barcode: String,                 // ✅ Barkod alanı eklendi
     courier: String, // Yurtiçi, Aras, MNG vb.
     status: { type: String, enum: ['created', 'in_transit', 'delivered'], default: 'created' },
     labelUrl: String
