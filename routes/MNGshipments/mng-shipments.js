@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Shipment = require("../../models/Shipment");
-const { createOrder } = require("../../services/mngService");
+const { createOrder, createBarcode } = require("../../services/mngService");
 const axios = require("axios");
 
 /**
@@ -100,6 +100,25 @@ router.get("/", async (req, res) => {
   } catch (err) {
     console.error("❌ Shipment listesi alınamadı:", err.message);
     res.status(500).json({ message: err.message });
+  }
+});
+
+router.post("/barcode", async (req, res) => {
+  try {
+    const { orderData } = req.body;
+
+    if (!orderData || !orderData.referenceId) {
+      return res.status(400).json({ message: "orderData.referenceId zorunlu" });
+    }
+
+    console.log("🧩 createBarcode test başlatılıyor...", orderData.referenceId);
+    const response = await createBarcode(orderData);
+    console.log("✅ createBarcode yanıtı:", response);
+
+    res.json(response);
+  } catch (err) {
+    console.error("❌ createBarcode test hatası:", err.response?.data || err.message);
+    res.status(500).json({ error: err.message, detail: err.response?.data });
   }
 });
 
