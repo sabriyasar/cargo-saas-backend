@@ -74,11 +74,11 @@ router.post("/orders-create", async (req, res) => {
     console.log("✅ Shop kaydı bulundu.");
 
     // 3️⃣ Recipient bilgilerini hazırla
-    let shipping = order.shipping_address || order.customer?.default_address;
+    let shipping = order.shipping_address || order.customer?.default_address || {};
     console.log("📥 Raw shipping data:", shipping);
     console.log("📥 Raw line_items:", order.line_items);
 
-    if (!shipping || !shipping.city || !shipping.province) {
+    if (!shipping.city || !shipping.province) {
       console.warn(
         "⚠️ Recipient bilgisi eksik — dummy recipient kullanılacak (test)."
       );
@@ -108,11 +108,11 @@ router.post("/orders-create", async (req, res) => {
         mobilePhoneNumber: shipping.phone,
         email: shipping.email,
       },
-      pieces: order.line_items?.map((item) => ({
-        description: item.name,
+      pieces: order.line_items.map((item) => ({
+        description: item.title, // ⬅️ Burada title olmalı
         quantity: item.quantity,
         weight: item.grams ? item.grams / 1000 : 0.5,
-      })) || [],
+      })),
     };
 
     console.log("🚚 MNG payload:", orderDataForMNG);
