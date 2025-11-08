@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const { ShopModel } = require("../../models/Shop");
-const { ShipmentModel } = require("../../models/Shipment"); // opsiyonel DB kaydı
-const OrderModel = require("../../models/Order"); // ✅ Order model eklendi
+const { ShipmentModel } = require("../../models/Shipment");
+const OrderModel = require("../../models/Order");
 const { createMNGShipment } = require("../../services/mngService");
-const { generateBarcode } = require("../../services/MNG/barcodeService"); // ✅ Barkod servisi
+const { generateBarcode } = require("../../services/MNG/barcodeService");
 const axios = require("axios");
 const crypto = require("crypto");
 
@@ -75,6 +75,8 @@ router.post("/orders-create", async (req, res) => {
 
     // 3️⃣ Recipient bilgilerini hazırla
     let shipping = order.shipping_address || order.customer?.default_address;
+    console.log("📥 Raw shipping data:", shipping);
+    console.log("📥 Raw line_items:", order.line_items);
 
     if (!shipping || !shipping.city || !shipping.province) {
       console.warn(
@@ -92,11 +94,12 @@ router.post("/orders-create", async (req, res) => {
 
     // 4️⃣ Barkod üret
     const barcode = generateBarcode(order.id);
+    console.log("🎫 Barkod oluşturuldu:", barcode);
 
     // 5️⃣ MNG gönderi payload
     const orderDataForMNG = {
       referenceId: order.id.toString(),
-      barcode, // ✅ Barkod gönderildi
+      barcode,
       recipient: {
         cityName: shipping.city,
         districtName: shipping.province,
@@ -105,16 +108,18 @@ router.post("/orders-create", async (req, res) => {
         mobilePhoneNumber: shipping.phone,
         email: shipping.email,
       },
-      pieces: order.line_items.map((item) => ({
+      pieces: order.line_items?.map((item) => ({
         description: item.name,
         quantity: item.quantity,
         weight: item.grams ? item.grams / 1000 : 0.5,
-      })),
+      })) || [],
     };
 
-    console.log("🚚 MNG gönderi oluşturma başlatıldı...");
+    console.log("🚚 MNG payload:", orderDataForMNG);
+
+    // 6️⃣ MNG gönderi oluştur
     const shipmentRes = await createMNGShipment(orderDataForMNG);
-    console.log("📦 MNG createOrder yanıtı:", shipmentRes);
+    console.log("📦 MNG API yanıtı:", shipmentRes);
 
     const trackingNumber =
       shipmentRes?.trackingNumber || shipmentRes?.data?.trackingNumber;
@@ -124,7 +129,7 @@ router.post("/orders-create", async (req, res) => {
     }
     console.log(`✅ MNG takip numarası: ${trackingNumber}`);
 
-    // 6️⃣ Shopify fulfillment oluştur
+    // 7️⃣ Shopify fulfillment oluştur
     if (shopRecord.accessToken) {
       console.log("🔄 Shopify fulfillment oluşturuluyor...");
       await axios.post(
@@ -149,22 +154,24 @@ router.post("/orders-create", async (req, res) => {
       console.log("✅ Shopify fulfillment başarıyla oluşturuldu.");
     }
 
-    // 7️⃣ DB’ye shipment kaydet
-    await ShipmentModel.create({
+    // 8️⃣ DB’ye shipment kaydet
+    const shipmentDoc = await ShipmentModel.create({
       orderId: order.id.toString(),
       trackingNumber,
-      barcode, // ✅ Barkod kaydedildi
+      barcode,
       courier: "MNG",
       shop: shopRecord.shop,
       createdAt: new Date(),
     });
+    console.log("💾 Shipment DB kaydı oluşturuldu:", shipmentDoc);
 
-    // 8️⃣ DB’de Order modelini de güncelle (opsiyonel)
-    await OrderModel.findOneAndUpdate(
+    // 9️⃣ DB’de Order modelini güncelle
+    const orderDoc = await OrderModel.findOneAndUpdate(
       { orderNumber: order.id.toString() },
       { barcode, trackingNumber, status: "fulfilled" },
       { upsert: true, new: true }
     );
+    console.log("💾 Order DB kaydı güncellendi:", orderDoc);
 
     console.log("🎯 Webhook başarıyla işlendi.");
     res.status(200).send("Webhook işlendi");
