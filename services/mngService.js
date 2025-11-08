@@ -202,8 +202,64 @@ async function createOrder(orderData) {
 }
 
 /**
+ * 🔹 BarcodeCommand API - Siparişi faturalaştır ve barkod oluştur
+ */
+async function createBarcode(orderData) {
+  console.log("🧾 MNG createBarcode() başladı:", orderData.referenceId);
+  const token = await getIdentityToken();
+
+  const body = {
+    referenceId: orderData.referenceId,
+    billOfLandingId: orderData.billOfLandingId || "İrsaliye 1",
+    isCOD: orderData.isCOD || 0,
+    codAmount: orderData.codAmount || 0,
+    packagingType: orderData.packagingType || 2,
+    printReferenceBarcodeOnError: 0,
+    message: orderData.message || orderData.content || "",
+    additionalContent1: "",
+    additionalContent2: "",
+    additionalContent3: "",
+    additionalContent4: "",
+    orderPieceList:
+      orderData.pieces?.map((p, i) => ({
+        barcode: `${orderData.referenceId}_PARCA${i + 1}`,
+        desi: p.desi || 2,
+        kg: p.kg || 1,
+        content: p.content || "Parça açıklama",
+      })) || [],
+  };
+
+  try {
+    const response = await axios.post(
+      `${BASE_URL}/barcodecmdapi/createbarcode`,
+      body,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "X-IBM-Client-Id": process.env.MNG_CREATE_ORDER_CLIENT_ID,
+          "X-IBM-Client-Secret": process.env.MNG_CREATE_ORDER_CLIENT_SECRET,
+          "x-api-version": DEFAULT_API_VERSION,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.log("✅ MNG createBarcode yanıtı alındı:", response.data);
+    return response.data;
+  } catch (err) {
+    console.error(
+      "❌ MNG createBarcode hatası:",
+      err.response?.data || err.message
+    );
+    throw err;
+  }
+}
+
+/**
  * 🔹 Shopify webhook tarafından çağrılacak ana fonksiyon
- * MNG'de sipariş oluşturur ve takip numarasını döner
+ * 1️⃣ Siparişi oluşturur
+ * 2️⃣ Faturalandırır ve barkod üretir
  */
 async function createMNGShipment({ orderId, courier, orderData }) {
   console.log("🚚 createMNGShipment tetiklendi:", orderId, courier);
@@ -228,17 +284,34 @@ async function createMNGShipment({ orderId, courier, orderData }) {
       "Ürün",
     pieces: orderData.pieces || [{ desi: 2, kg: 1, content: "Ürün paketi" }],
     recipient,
-    marketPlaceShortCode: "", // Shopify siparişleri için boş string
+    marketPlaceShortCode: "",
   };
-  console.log("📦 MNG createOrder çağrılıyor...");
-  const response = await createOrder(shipmentData);
-  console.log("✅ MNG createOrder tamamlandı:", response.trackingNumber);
 
-  return response;
+  console.log("📦 MNG createOrder çağrılıyor...");
+  await createOrder(shipmentData);
+
+  console.log("🧾 MNG createBarcode çağrılıyor...");
+  const barcodeResp = await createBarcode(shipmentData);
+
+  const trackingNumber =
+    barcodeResp.shipmentId || barcodeResp.barcodes?.[0]?.value || "";
+  const barcode = barcodeResp.barcodes
+    ?.map((b) => b.value)
+    .join(", ") || "Barkod Yok";
+
+  console.log(
+    "✅ MNG shipment tamamlandı. TrackingNumber:",
+    trackingNumber,
+    "Barcode:",
+    barcode
+  );
+
+  return { trackingNumber, barcode, ...barcodeResp };
 }
 
 module.exports = {
   getIdentityToken,
   createOrder,
-  createMNGShipment, // 🔹 Yeni eklendi
+  createBarcode,
+  createMNGShipment,
 };
