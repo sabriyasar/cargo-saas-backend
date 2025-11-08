@@ -109,7 +109,7 @@ router.post("/orders-create", async (req, res) => {
         email: shipping.email,
       },
       pieces: order.line_items.map((item) => ({
-        description: item.title, // ⬅️ Burada title olmalı
+        description: item.title || item.name || "Ürün",
         quantity: item.quantity,
         weight: item.grams ? item.grams / 1000 : 0.5,
       })),
@@ -123,6 +123,7 @@ router.post("/orders-create", async (req, res) => {
 
     const trackingNumber =
       shipmentRes?.trackingNumber || shipmentRes?.data?.trackingNumber;
+
     if (!trackingNumber) {
       console.error("❌ MNG shipment oluşturulamadı — trackingNumber yok.");
       return res.status(500).send("MNG shipment oluşturulamadı");

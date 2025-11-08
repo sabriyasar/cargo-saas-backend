@@ -9,6 +9,7 @@ const app = express();
 
 app.use(cors());
 app.use(cookieParser());
+app.use(express.json());
 
 const PORT = process.env.PORT || 3003;
 const MONGO_URI = process.env.MONGO_URI;
