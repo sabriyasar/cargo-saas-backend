@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Shipment = require("../../models/Shipment");
-const { createOrder } = require("../../services/mngService");
+const { createMNGShipment } = require("../../services/mngService");
 const axios = require("axios");
 
 /**
@@ -23,8 +23,8 @@ async function updateShopifyFulfillment(orderId, trackingNumber, courier) {
           location_id: Number(process.env.SHOPIFY_LOCATION_ID),
           tracking_number: trackingNumber,
           tracking_company: courier,
-          notify_customer: true
-        }
+          notify_customer: true,
+        },
       },
       {
         headers: {
@@ -46,25 +46,25 @@ async function updateShopifyFulfillment(orderId, trackingNumber, courier) {
  * Yeni MNG shipment oluşturur ve Shopify siparişini update eder
  */
 router.post("/", async (req, res) => {
-  const { orderId, courier, isReturn, orderData } = req.body;
+  const { orderId, courier, orderData } = req.body;
 
   if (!orderId || !courier || !orderData) {
     return res.status(400).json({ message: "orderId, courier ve orderData zorunlu" });
   }
 
   try {
-    // 1️⃣ MNG Barcode Command ile sipariş oluştur
-    const shipmentData = await createOrder(orderData);
-    console.log("✅ MNG dönen veri:", shipmentData);
+    // 1️⃣ MNG'de sipariş oluştur ve barcode üret
+    const shipmentResp = await createMNGShipment({ orderId, courier, orderData });
+    console.log("✅ MNG dönen veri:", shipmentResp);
 
     // 2️⃣ MongoDB kaydı
     const shipment = new Shipment({
       orderId,
       courier,
-      trackingNumber: shipmentData.trackingNumber || "",
-      barcode: shipmentData.orderData?.pieces?.[0]?.barcode || "",
-      labelUrl: shipmentData.labelUrl || shipmentData.returnOrderLabelURL || "",
-      status: "created" // mevcut enum: created, in_transit, delivered
+      trackingNumber: shipmentResp.trackingNumber || "",
+      barcode: shipmentResp.barcode || "",
+      labelUrl: shipmentResp.labelUrl || "",
+      status: "created",
     });
     await shipment.save();
 
@@ -76,7 +76,6 @@ router.post("/", async (req, res) => {
     // 4️⃣ Frontend için id ekle
     const shipmentWithId = { ...shipment.toObject(), id: shipment._id.toString() };
     res.json(shipmentWithId);
-
   } catch (err) {
     console.error("❌ MNG shipment oluşturulamadı:", err.response?.data || err.message);
     res.status(500).json({ message: err.message });
@@ -96,7 +95,7 @@ router.get("/", async (req, res) => {
     const idsArray = String(orderIds).split(",");
     const shipments = await Shipment.find({ orderId: { $in: idsArray } });
 
-    res.json(shipments.map(s => ({ ...s.toObject(), id: s._id.toString() })));
+    res.json(shipments.map((s) => ({ ...s.toObject(), id: s._id.toString() })));
   } catch (err) {
     console.error("❌ Shipment listesi alınamadı:", err.message);
     res.status(500).json({ message: err.message });

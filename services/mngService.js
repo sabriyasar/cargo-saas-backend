@@ -4,19 +4,13 @@ const NodeCache = require("node-cache");
 const BASE_URL = "https://api.mngkargo.com.tr/mngapi/api";
 const DEFAULT_API_VERSION = process.env.MNG_API_VERSION || "1.0";
 
-// Token cache (identity için)
 let identityTokenCache = null;
-
-// CBS Info cache: 24 saat
 const cbsCache = new NodeCache({ stdTTL: 86400, checkperiod: 3600 });
 
 function normalize(str) {
   return str.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 }
 
-/**
- * 🔹 CBS Info: cityCode ve districtCode bul
- */
 async function findCityAndDistrictCodes(cityName, districtName) {
   const cacheKey = `${cityName.toLowerCase()}_${districtName.toLowerCase()}`;
   const cached = cbsCache.get(cacheKey);
@@ -43,21 +37,11 @@ async function findCityAndDistrictCodes(cityName, districtName) {
   return result;
 }
 
-/**
- * 🔹 Identity API’den JWT token al
- */
 async function getIdentityToken() {
-  if (process.env.MNG_ORDER_JWT) {
-    console.log("🔑 Statik MNG_ORDER_JWT kullanılıyor.");
-    return process.env.MNG_ORDER_JWT;
-  }
+  if (process.env.MNG_ORDER_JWT) return process.env.MNG_ORDER_JWT;
 
-  if (identityTokenCache && new Date() < identityTokenCache.expireDate) {
-    console.log("♻️ Cached MNG token kullanılıyor.");
-    return identityTokenCache.token;
-  }
+  if (identityTokenCache && new Date() < identityTokenCache.expireDate) return identityTokenCache.token;
 
-  console.log("🔐 Yeni MNG identity token alınıyor...");
   const response = await axios.post(
     `${BASE_URL}/token`,
     {
@@ -79,25 +63,52 @@ async function getIdentityToken() {
   const { jwt, jwtExpireDate } = response.data;
   if (!jwt || !jwtExpireDate) throw new Error("MNG Identity Token eksik!");
 
-  console.log("✅ MNG identity token başarıyla alındı.");
   identityTokenCache = { token: jwt, expireDate: new Date(jwtExpireDate) };
   return jwt;
 }
 
+// 🔹 Yeni createBarcode fonksiyonu
+async function createBarcode(orderData) {
+  const token = await getIdentityToken();
+
+  const body = {
+    referenceId: orderData.referenceId,
+    billOfLandingId: orderData.billOfLandingId || "İrsaliye 1",
+    isCOD: orderData.isCOD || 0,
+    codAmount: orderData.codAmount || 0,
+    packagingType: orderData.packagingType || 2,
+    message: orderData.message || orderData.content || "",
+    orderPieceList: orderData.pieces?.map((p, i) => ({
+      barcode: `${orderData.referenceId}_PARCA${i + 1}`,
+      desi: p.desi || 2,
+      kg: p.kg || 1,
+      content: p.content || "Ürün paketi",
+    })) || [],
+  };
+
+  const response = await axios.post(`${BASE_URL}/barcodecmdapi/createbarcode`, body, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "X-IBM-Client-Id": process.env.MNG_CREATE_ORDER_CLIENT_ID,
+      "X-IBM-Client-Secret": process.env.MNG_CREATE_ORDER_CLIENT_SECRET,
+      "x-api-version": DEFAULT_API_VERSION,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+  });
+
+  return response.data;
+}
+
 /**
- * 🔹 Yeni Standard Command API - createOrder
+ * 🔹 createOrder fonksiyonu (mevcut)
  */
 async function createOrder(orderData) {
-  console.log("📦 MNG createOrder() başladı. Referans:", orderData.referenceId || orderData.orderId);
-
   const identityToken = await getIdentityToken();
   const referenceId = orderData.referenceId || orderData._id || orderData.orderId?.toString();
 
   let cityCode, districtCode;
   if (!orderData.recipient?.customerId) {
-    if (!orderData.recipient?.cityName || !orderData.recipient?.districtName) {
-      throw new Error("Recipient cityName veya districtName eksik.");
-    }
     const codes = await findCityAndDistrictCodes(orderData.recipient.cityName, orderData.recipient.districtName);
     cityCode = codes.cityCode;
     districtCode = codes.districtCode;
@@ -132,7 +143,7 @@ async function createOrder(orderData) {
       paymentType: 1,
       deliveryType: 1,
       description: orderData.message || orderData.content || `Sipariş ${referenceId}`,
-      marketPlaceShortCode: orderData.marketPlaceShortCode ?? '',
+      marketPlaceShortCode: orderData.marketPlaceShortCode ?? "",
     },
     orderPieceList:
       orderData.pieces?.map((p, i) => ({
@@ -144,41 +155,21 @@ async function createOrder(orderData) {
     recipient,
   };
 
-  try {
-    console.log("🚀 MNG createOrder isteği gönderiliyor...");
-    const response = await axios.post(`${BASE_URL}/standardcmdapi/createOrder`, apiBody, {
-      headers: {
-        Authorization: `Bearer ${identityToken}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "X-IBM-Client-Id": process.env.MNG_CREATE_ORDER_CLIENT_ID,
-        "X-IBM-Client-Secret": process.env.MNG_CREATE_ORDER_CLIENT_SECRET,
-        "x-api-version": DEFAULT_API_VERSION,
-      },
-    });
+  const response = await axios.post(`${BASE_URL}/standardcmdapi/createOrder`, apiBody, {
+    headers: {
+      Authorization: `Bearer ${identityToken}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "X-IBM-Client-Id": process.env.MNG_CREATE_ORDER_CLIENT_ID,
+      "X-IBM-Client-Secret": process.env.MNG_CREATE_ORDER_CLIENT_SECRET,
+      "x-api-version": DEFAULT_API_VERSION,
+    },
+  });
 
-    console.log("✅ MNG createOrder yanıtı alındı:", response.data);
-
-    const trackingNumber =
-      response.data?.order?.barcode ||
-      response.data?.shipmentId ||
-      response.data?.barcodes?.[0]?.value ||
-      "";
-
-    return {
-      ...response.data,
-      trackingNumber,
-    };
-  } catch (err) {
-    console.error("❌ MNG createOrder hatası:", err.response?.data || err.message);
-    throw err;
-  }
+  return { ...response.data };
 }
 
-/**
- * 🔹 Shopify webhook tarafından çağrılacak ana fonksiyon
- * MNG'de sipariş oluşturur ve takip numarasını döner
- */
+// 🔹 createMNGShipment fonksiyonu güncellendi
 async function createMNGShipment({ orderId, courier, orderData }) {
   console.log("🚚 createMNGShipment tetiklendi:", orderId, courier);
 
@@ -196,18 +187,27 @@ async function createMNGShipment({ orderId, courier, orderData }) {
     content: orderData.content || orderData.line_items?.map(i => i.title).join(", ") || "Ürün",
     pieces: orderData.pieces || [{ desi: 2, kg: 1, content: "Ürün paketi" }],
     recipient,
-    marketPlaceShortCode: '', // Shopify siparişleri için boş string
+    marketPlaceShortCode: "",
   };
-  
-  console.log("📦 MNG createOrder çağrılıyor...");
-  const response = await createOrder(shipmentData);
-  console.log("✅ MNG createOrder tamamlandı:", response.trackingNumber);
 
-  return response;
+  console.log("📦 MNG createOrder çağrılıyor...");
+  const orderResp = await createOrder(shipmentData);
+
+  console.log("📦 MNG createBarcode çağrılıyor...");
+  const barcodeResp = await createBarcode(shipmentData);
+
+  // trackingNumber ve barcode burada alınır
+  const trackingNumber = barcodeResp.shipmentId || barcodeResp.barcodes?.[0]?.value || "";
+  const barcode = barcodeResp.barcodes?.map(b => b.value).join(",") || "";
+
+  console.log("✅ MNG shipment tamamlandı. TrackingNumber:", trackingNumber, "Barcode:", barcode);
+
+  return { ...orderResp, trackingNumber, barcode };
 }
 
 module.exports = {
   getIdentityToken,
   createOrder,
-  createMNGShipment, // 🔹 Yeni eklendi
+  createBarcode,
+  createMNGShipment,
 };
