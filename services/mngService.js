@@ -195,6 +195,7 @@ async function createMNGShipment({ orderId, courier, orderData }) {
     content: orderData.line_items?.map((i) => i.title).join(", ") || "Ürün",
     pieces: [{ desi: 2, kg: 1, content: "Ürün paketi" }],
     recipient,
+    marketPlaceShortCode: '', // veya 'TRND', 'GG', 'N11' Shopify siparişine göre
   };
 
   console.log("📦 MNG createOrder çağrılıyor...");
