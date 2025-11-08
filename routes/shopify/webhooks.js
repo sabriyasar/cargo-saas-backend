@@ -74,7 +74,7 @@ router.post("/orders-create", async (req, res) => {
     console.log("✅ Shop kaydı bulundu.");
 
     // 3️⃣ Recipient bilgilerini hazırla
-    const shipping = order.shipping_address || order.customer?.default_address;
+    let shipping = order.shipping_address || order.customer?.default_address;
 
     if (!shipping || !shipping.city || !shipping.province) {
       console.warn(
