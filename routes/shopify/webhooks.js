@@ -74,7 +74,8 @@ router.post("/orders-create", async (req, res) => {
     console.log("✅ Shop kaydı bulundu.");
 
     // 3️⃣ Recipient bilgilerini hazırla
-    let shipping = order.shipping_address || order.customer?.default_address || {};
+    let shipping =
+      order.shipping_address || order.customer?.default_address || {};
     console.log("📥 Raw shipping data:", shipping);
     console.log("📥 Raw line_items:", order.line_items);
 
@@ -118,7 +119,15 @@ router.post("/orders-create", async (req, res) => {
     console.log("🚚 MNG payload:", orderDataForMNG);
 
     // 6️⃣ MNG gönderi oluştur
-    const shipmentRes = await createMNGShipment(orderDataForMNG);
+    const shipmentRes = await createMNGShipment({
+      orderId: order.id.toString(),
+      courier: "MNG",
+      orderData: {
+        ...orderDataForMNG,
+        marketPlaceShortCode: "SHOPIFY", // TRND, GG, N11 veya '' yerine Shopify için özel değer
+      },
+    });
+
     console.log("📦 MNG API yanıtı:", shipmentRes);
 
     const trackingNumber =

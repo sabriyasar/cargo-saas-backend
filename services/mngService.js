@@ -132,6 +132,7 @@ async function createOrder(orderData) {
       paymentType: 1,
       deliveryType: 1,
       description: orderData.message || orderData.content || `Sipariş ${referenceId}`,
+      marketPlaceShortCode: orderData.marketPlaceShortCode ?? '',
     },
     orderPieceList:
       orderData.pieces?.map((p, i) => ({
@@ -192,12 +193,12 @@ async function createMNGShipment({ orderId, courier, orderData }) {
 
   const shipmentData = {
     referenceId: orderId,
-    content: orderData.line_items?.map((i) => i.title).join(", ") || "Ürün",
-    pieces: [{ desi: 2, kg: 1, content: "Ürün paketi" }],
+    content: orderData.content || orderData.line_items?.map(i => i.title).join(", ") || "Ürün",
+    pieces: orderData.pieces || [{ desi: 2, kg: 1, content: "Ürün paketi" }],
     recipient,
-    marketPlaceShortCode: '', // veya 'TRND', 'GG', 'N11' Shopify siparişine göre
+    marketPlaceShortCode: '', // Shopify siparişleri için boş string
   };
-
+  
   console.log("📦 MNG createOrder çağrılıyor...");
   const response = await createOrder(shipmentData);
   console.log("✅ MNG createOrder tamamlandı:", response.trackingNumber);
