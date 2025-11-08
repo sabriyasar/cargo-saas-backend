@@ -3,6 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
+const cors = require('cors'); // <- bunu ekle
 const corsOptions = require("./config/cors");
 
 const app = express();
