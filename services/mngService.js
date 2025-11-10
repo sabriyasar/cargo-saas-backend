@@ -128,7 +128,9 @@ async function createOrder(orderData) {
       desi: p.desi || 2,
       kg: p.kg || 1,
       content: p.content || "Parça açıklama",
-    })) || [],
+    })) || [
+      { barcode: `${referenceId}_PARCA1`, desi: 2, kg: 1, content: "Varsayılan Paket" },
+    ],
     recipient,
   };
 
@@ -152,11 +154,13 @@ async function createOrder(orderData) {
 }
 
 async function createBarcode(orderData) {
-  console.log("🧾 MNG createBarcode() başladı:", orderData.referenceId);
+  const uniqueRef = `${orderData.referenceId}_${Date.now()}`; // Benzersiz ID
+  console.log("🧾 MNG createBarcode() başladı:", uniqueRef);
+
   const token = await getIdentityToken();
 
   const body = {
-    referenceId: orderData.referenceId,
+    referenceId: uniqueRef,
     billOfLandingId: orderData.billOfLandingId || "İrsaliye 1",
     isCOD: orderData.isCOD || 0,
     codAmount: orderData.codAmount || 0,
@@ -167,12 +171,17 @@ async function createBarcode(orderData) {
     additionalContent2: "",
     additionalContent3: "",
     additionalContent4: "",
-    orderPieceList: orderData.pieces?.map((p, i) => ({
-      barcode: `${orderData.referenceId}_PARCA${i + 1}`,
-      desi: p.desi || 2,
-      kg: p.kg || 1,
-      content: p.content || "Parça açıklama",
-    })) || [],
+    orderPieceList:
+      orderData.pieces?.length
+        ? orderData.pieces.map((p, i) => ({
+            barcode: `${uniqueRef}_PARCA${i + 1}`,
+            desi: p.desi || 2,
+            kg: p.kg || 1,
+            content: p.content || "Parça açıklama",
+          }))
+        : [
+            { barcode: `${uniqueRef}_PARCA1`, desi: 2, kg: 1, content: "Varsayılan Paket" },
+          ],
   };
 
   try {
@@ -187,8 +196,11 @@ async function createBarcode(orderData) {
       },
     });
 
-    console.log("✅ MNG createBarcode yanıtı alındı:", response.data);
-    return response.data;
+    console.log("✅ MNG createBarcode yanıtı:", JSON.stringify(response.data, null, 2));
+    const trackingNumber = response.data.shipmentId || response.data.barcodes?.[0]?.value || "";
+    const barcode = response.data.barcodes?.map((b) => b.value).join(", ") || "Barkod Yok";
+
+    return { trackingNumber, barcode, ...response.data };
   } catch (err) {
     console.error("❌ MNG createBarcode hatası:", err.response?.data || err.message);
     throw err;
@@ -210,21 +222,17 @@ async function createMNGShipment({ orderId, courier, orderData }) {
   const shipmentData = {
     referenceId: orderId,
     content: orderData.content || orderData.line_items?.map((i) => i.title).join(", ") || "Ürün",
-    pieces: orderData.pieces || [{ desi: 2, kg: 1, content: "Ürün paketi" }],
+    pieces: orderData.pieces || [{ desi: 2, kg: 1, content: "Varsayılan Paket" }],
     recipient,
     marketPlaceShortCode: "",
   };
 
-  // createOrder opsiyonel, createBarcode barkod + invoice oluşturacak
   console.log("🧾 MNG createBarcode çağrılıyor...");
   const barcodeResp = await createBarcode(shipmentData);
 
-  const trackingNumber = barcodeResp.shipmentId || barcodeResp.barcodes?.[0]?.value || "";
-  const barcode = barcodeResp.barcodes?.map((b) => b.value).join(", ") || "Barkod Yok";
+  console.log("✅ MNG shipment tamamlandı. TrackingNumber:", barcodeResp.trackingNumber, "Barcode:", barcodeResp.barcode);
 
-  console.log("✅ MNG shipment tamamlandı. TrackingNumber:", trackingNumber, "Barcode:", barcode);
-
-  return { trackingNumber, barcode, ...barcodeResp };
+  return barcodeResp;
 }
 
 module.exports = {
