@@ -154,13 +154,34 @@ async function createOrder(orderData) {
 }
 
 async function createBarcode(orderData) {
-  const uniqueRef = `${orderData.referenceId}_${Date.now()}`; // Benzersiz ID
-  console.log("🧾 MNG createBarcode() başladı:", uniqueRef);
-
+  console.log("🧾 MNG createBarcode() başladı:", orderData.referenceId);
   const token = await getIdentityToken();
 
+  // recipient objesi customerId yoksa adres üzerinden doldurulacak
+  const recipient = orderData.recipient?.customerId
+    ? {
+        customerId: orderData.recipient.customerId,
+        refCustomerId: orderData.recipient.refCustomerId || "",
+      }
+    : {
+        customerId: 0, // MNG için zorunlu ama 0 gönderebiliriz
+        refCustomerId: "",
+        cityCode: orderData.recipient?.cityCode || 0,
+        districtCode: orderData.recipient?.districtCode || 0,
+        cityName: orderData.recipient?.cityName || "",
+        districtName: orderData.recipient?.districtName || "",
+        address: orderData.recipient?.address || "",
+        email: orderData.recipient?.email || "",
+        fullName: orderData.recipient?.fullName || "",
+        mobilePhoneNumber: orderData.recipient?.mobilePhoneNumber || "",
+        homePhoneNumber: "",
+        bussinessPhoneNumber: "",
+        taxOffice: "",
+        taxNumber: "",
+      };
+
   const body = {
-    referenceId: uniqueRef,
+    referenceId: orderData.referenceId,
     billOfLandingId: orderData.billOfLandingId || "İrsaliye 1",
     isCOD: orderData.isCOD || 0,
     codAmount: orderData.codAmount || 0,
@@ -172,16 +193,13 @@ async function createBarcode(orderData) {
     additionalContent3: "",
     additionalContent4: "",
     orderPieceList:
-      orderData.pieces?.length
-        ? orderData.pieces.map((p, i) => ({
-            barcode: `${uniqueRef}_PARCA${i + 1}`,
-            desi: p.desi || 2,
-            kg: p.kg || 1,
-            content: p.content || "Parça açıklama",
-          }))
-        : [
-            { barcode: `${uniqueRef}_PARCA1`, desi: 2, kg: 1, content: "Varsayılan Paket" },
-          ],
+      orderData.pieces?.map((p, i) => ({
+        barcode: `${orderData.referenceId}_PARCA${i + 1}`,
+        desi: p.desi || 2,
+        kg: p.kg || 1,
+        content: p.content || "Parça açıklama",
+      })) || [],
+    recipient,
   };
 
   try {
@@ -196,11 +214,8 @@ async function createBarcode(orderData) {
       },
     });
 
-    console.log("✅ MNG createBarcode yanıtı:", JSON.stringify(response.data, null, 2));
-    const trackingNumber = response.data.shipmentId || response.data.barcodes?.[0]?.value || "";
-    const barcode = response.data.barcodes?.map((b) => b.value).join(", ") || "Barkod Yok";
-
-    return { trackingNumber, barcode, ...response.data };
+    console.log("✅ MNG createBarcode yanıtı alındı:", response.data);
+    return response.data;
   } catch (err) {
     console.error("❌ MNG createBarcode hatası:", err.response?.data || err.message);
     throw err;
@@ -210,29 +225,62 @@ async function createBarcode(orderData) {
 async function createMNGShipment({ orderId, courier, orderData }) {
   console.log("🚚 createMNGShipment tetiklendi:", orderId, courier);
 
-  const recipient = {
-    fullName: `${orderData.shipping_address?.first_name || ""} ${orderData.shipping_address?.last_name || ""}`.trim(),
-    address: orderData.shipping_address?.address1 || "",
-    cityName: orderData.shipping_address?.city || "",
-    districtName: orderData.shipping_address?.province || "",
-    mobilePhoneNumber: orderData.shipping_address?.phone || orderData.customer?.phone || "",
-    email: orderData.email || "",
-  };
+  // recipient objesi, customerId yoksa adres üzerinden doldurulacak
+  const recipient = orderData.recipient?.customerId
+    ? {
+        customerId: orderData.recipient.customerId,
+        refCustomerId: orderData.recipient.refCustomerId || "",
+      }
+    : {
+        customerId: 0, // zorunlu alan, 0 gönderebiliriz
+        refCustomerId: "",
+        cityCode: orderData.recipient?.cityCode || 0,
+        districtCode: orderData.recipient?.districtCode || 0,
+        cityName: orderData.recipient?.cityName || "",
+        districtName: orderData.recipient?.districtName || "",
+        address: orderData.recipient?.address || "",
+        email: orderData.recipient?.email || "",
+        fullName: orderData.recipient?.fullName || "",
+        mobilePhoneNumber: orderData.recipient?.mobilePhoneNumber || "",
+        homePhoneNumber: "",
+        bussinessPhoneNumber: "",
+        taxOffice: "",
+        taxNumber: "",
+      };
 
   const shipmentData = {
     referenceId: orderId,
-    content: orderData.content || orderData.line_items?.map((i) => i.title).join(", ") || "Ürün",
-    pieces: orderData.pieces || [{ desi: 2, kg: 1, content: "Varsayılan Paket" }],
+    content:
+      orderData.content ||
+      orderData.line_items?.map((i) => i.title).join(", ") ||
+      "Ürün",
+    pieces:
+      orderData.pieces || [{ desi: 2, kg: 1, content: "Ürün paketi" }],
     recipient,
-    marketPlaceShortCode: "",
+    marketPlaceShortCode: orderData.marketPlaceShortCode || "",
+    billOfLandingId: orderData.billOfLandingId || "İrsaliye 1",
+    isCOD: orderData.isCOD || 0,
+    codAmount: orderData.codAmount || 0,
+    packagingType: orderData.packagingType || 2,
+    message: orderData.message || orderData.content || "",
   };
 
   console.log("🧾 MNG createBarcode çağrılıyor...");
   const barcodeResp = await createBarcode(shipmentData);
 
-  console.log("✅ MNG shipment tamamlandı. TrackingNumber:", barcodeResp.trackingNumber, "Barcode:", barcodeResp.barcode);
+  const trackingNumber =
+    barcodeResp.shipmentId || barcodeResp.barcodes?.[0]?.value || "";
+  const barcode =
+    barcodeResp.barcodes?.map((b) => b.value).join(", ") || "Barkod Yok";
 
-  return barcodeResp;
+  console.log(
+    "✅ MNG shipment tamamlandı. TrackingNumber:",
+    trackingNumber,
+    "Barcode:",
+    barcode
+  );
+
+  return { trackingNumber, barcode, ...barcodeResp };
 }
 
 module.exports = {
